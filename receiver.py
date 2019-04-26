@@ -93,16 +93,22 @@ def data_available(n):
 
 def pop(n):
     for i in range(0,8):
-        data[i]['samples'] = data[i]['samples'][n:]
+        data[i]['samples'] = data[i]['samples'][:len(data[i]['samples'])-n]
 
-def corrolate(refference, signal):
-    fft_0 = np.fft.fft(data[0]['samples'][:1024*128])
-    fft_i = np.fft.fft(data[i]['samples'][:1024*128])
+def corrolate(reference, signal, i):
+    fft_0 = np.fft.fft(reference)
+    fft_i = np.fft.fft(signal)
     # fft_0 = np.fft.fft(data[0]['samples']*np.bartlett(data[0]['samples'].size))
     # fft_i = np.fft.fft(data[i]['samples']*np.bartlett(data[i]['samples'].size))
     corrolation = np.fft.ifft( fft_0 * np.conjugate(fft_i) )
     # corrolation = np.correlate(data[0]['samples'],data[i]['samples'],'full')
     return corrolation
+    # if i in data:
+    #     if 'results' not in data[i]:
+    #         data[i]['results'] = []
+    #     data[i]['results'].append(corrolation)
+    # else:
+    #     print('Can\'t save results because i='+str(i)+' doesn\'t exists')
 
 async def plotloop( sample_rate, center_freq, i ):
     plt.ion()
@@ -124,7 +130,7 @@ async def plotloop( sample_rate, center_freq, i ):
                         # FFT Plot
                         # ------------------------------
                         # ax1=plt.subplot(3, 1, 1)
-                        # fft = np.fft.fft(data[i]['samples'][:1024*128])
+                        # fft = np.fft.fft(data[i]['samples'][-1024*128:])
                         # freq = (np.fft.fftfreq(len(fft),1/sample_rate)+center_freq)/1e6
                         # plt.plot(freq, 10*np.log10(fft), alpha=0.5)
                         # plt.title('FFT of Signals')
@@ -134,11 +140,11 @@ async def plotloop( sample_rate, center_freq, i ):
                         # ------------------------------
                         # Time Domain Plot
                         # ------------------------------
-                        # ax1=plt.subplot(3, 2, 3)
-                        # plt.plot(range(0,len(data[i]['samples'][:1024*128])),data[i]['samples'][:1024*128], alpha=0.5)
-                        # plt.title('Time Domain of Signals')
-                        # plt.xlabel('Sample')
-                        # plt.ylabel('Amplitude')
+                        ax1=plt.subplot(3, 2, 3)
+                        plt.plot(range(0,len(data[i]['samples'][-1024*128:])),data[i]['samples'][-1024*128:], alpha=0.5)
+                        plt.title('Time Domain of Signals')
+                        plt.xlabel('Sample')
+                        plt.ylabel('Amplitude')
 
                         # ------------------------------
                         # Corrolation Plot + Shift
@@ -149,7 +155,7 @@ async def plotloop( sample_rate, center_freq, i ):
                             if data[i]['sync'] == True:
                                 if 0 in data:
                                     ax1=plt.subplot(3, 2, 4)
-                                    corrolation = corrolate(data[0]['samples'][:1024*128], data[i]['samples'][:1024*128])
+                                    corrolation = corrolate(data[0]['samples'][-1024*128:], data[i]['samples'][-1024*128:], i)
                                     x_p = range(0,int(corrolation.size/2))
                                     x_n = range(-int(corrolation.size/2),0)
                                     x = np.concatenate((x_p, x_n), axis=None)
@@ -165,7 +171,7 @@ async def plotloop( sample_rate, center_freq, i ):
                                     data[i]['sync'] = False # synchronisation of channel done
 
                         if 'shift' in data[i]:
-                            shifted_data = np.roll(data[i]['samples'][:1024*128], data[i]['shift'])
+                            shifted_data = np.roll(data[i]['samples'][-1024*128:], data[i]['shift'])
                             # else:
                             #     shifted_data = data[i]['samples']
 
@@ -184,7 +190,7 @@ async def plotloop( sample_rate, center_freq, i ):
                             if i >= 0:
                                 if 0 in data:
                                     ax1=plt.subplot(3, 2, 6)
-                                    corrolation = corrolate(data[0]['samples'][:1024*128], shifted_data)
+                                    corrolation = corrolate(data[0]['samples'][-1024*128:], shifted_data, i)
                                     plt.plot(x, corrolation, alpha=0.5)
                                     plt.title('Corrolation of Shifted Signals')
                                     plt.xlabel('Samples Shifted')
@@ -241,10 +247,42 @@ for i in range(0,8):
         data[i] = {}
     data[i]['sync'] = True
 
+def calculation_loop():
+    while True:
+        if data_available(1024*128):
+            for i in range(0,8):
+                if i in data:
+                    print('i: '+str(i)+' | counter: '+str(data[i]['counter']))
+                    if data[i]['samples'].any() != None:
+
+                        if 'sync' in data[i]:
+                            if data[i]['sync'] == True:
+                                if 0 in data:
+                                    corrolation = corrolate(data[0]['samples'][-1024*128:], data[i]['samples'][-1024*128:], i)
+                                    print('Maximum is '+str(np.amax(corrolation))+' at position '+str(np.argmax(corrolation)))
+                                    data[i]['shift'] = np.argmax(corrolation)-data[i]['samples'].size
+                                    print('shift: '+str(data[i]['shift']))
+                                    data[i]['sync'] = False # synchronisation of channel done
+
+                        if 'shift' in data[i]:
+                            shifted_data = np.roll(data[i]['samples'][-1024*128:], data[i]['shift'])
+
+                            if i >= 0:
+                                if 0 in data:
+                                    corrolation = corrolate(data[0]['samples'][-1024*128:], shifted_data, i)
+                                    print('Maximum is '+str(np.amax(corrolation))+' at position '+str(np.argmax(corrolation)))
+
+                    else:
+                        print("No Data")
+            pop(1024*64)
+        else:
+            print("Not Enough Data")
+            time.sleep(0.1)
+
 # def data_acquisition_loop():
 
-input_source = 'sdr'
-# input_source = 'file'
+# input_source = 'sdr'
+input_source = 'file'
 
 # ------------------------------
 # Start SDRs
@@ -270,9 +308,10 @@ if input_source == 'file':
     for i in range(0,8):
         # tasks.append(read('./data/rtl'+str(i+1),1024*32,i))
         tasks.append(read_stream('../data/rtl'+str(i+1),1024*128,i))
-    tasks.append(plotloop(2048000,868e6,1))
+    # tasks.append(plotloop(2048000,868e6,1))
 
 threading.Thread(target=user_input, args=[]).start()
+threading.Thread(target=calculation_loop, args=[]).start()
 
 loop.run_until_complete(asyncio.gather(*tasks))
 # loops[i].run_until_complete(receive(sdr))
