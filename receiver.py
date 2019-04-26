@@ -9,6 +9,9 @@ import atexit
 import threading
 
 data={}
+tasks=[]
+sdrs=[]
+loop = asyncio.get_event_loop()
 
 async def receive(sdr,i):
     async for samples in sdr.stream():
@@ -37,7 +40,7 @@ async def receive(sdr,i):
             data[i]['samples'] = np.concatenate([ samples, data[i]['samples'] ])
         else:
             data[i]['samples'] = samples
-        print(len(samples))
+        print(data[i]['samples'].size)
 
         # y = np.fft.fft(samples)
         # x = np.linspace(0, 1, samples.size)
@@ -132,29 +135,32 @@ async def plotloop( sample_rate, center_freq, i ):
                         # Corrolation Plot + Shift
                         # ------------------------------
                         # if i >= 0:
-                        if 'shift' not in data[i]:
-                            if 0 in data:
-                                ax1=plt.subplot(3, 2, 4)
-                                fft_0 = np.fft.fft(data[0]['samples'][:1024*128])
-                                fft_i = np.fft.fft(data[i]['samples'][:1024*128])
-                                # fft_0 = np.fft.fft(data[0]['samples']*np.bartlett(data[0]['samples'].size))
-                                # fft_i = np.fft.fft(data[i]['samples']*np.bartlett(data[i]['samples'].size))
-                                corrolation = np.fft.ifft( fft_0 * np.conjugate(fft_i) )
-                                # corrolation = np.correlate(data[0]['samples'],data[i]['samples'],'full')
-                                # freq = np.fft.fftfreq(len(corrolation),1)
-                                # array([ 0.  ,  1.25,  2.5 ,  3.75, -5.  , -3.75, -2.5 , -1.25])
-                                x_p = range(0,int(corrolation.size/2))
-                                x_n = range(-int(corrolation.size/2),0)
-                                x = np.concatenate((x_p, x_n), axis=None)
-                                # x = range(-int(corrolation.size/2),int(corrolation.size/2))
-                                plt.plot(x, corrolation, alpha=0.5)
-                                plt.title('Corrolation of Signals')
-                                plt.xlabel('Samples Shifted')
-                                plt.ylabel('Corrolation')
-                                # if 'shift' not in data[i]:
-                                print('Maximum is '+str(np.amax(corrolation))+' at position '+str(np.argmax(corrolation)))
-                                data[i]['shift'] = np.argmax(corrolation)-data[i]['samples'].size
-                                print('shift: '+str(data[i]['shift']))
+                        # if 'shift' not in data[i]:
+                        if 'sync' in data[i]:
+                            if data[i]['sync'] == True:
+                                if 0 in data:
+                                    ax1=plt.subplot(3, 2, 4)
+                                    fft_0 = np.fft.fft(data[0]['samples'][:1024*128])
+                                    fft_i = np.fft.fft(data[i]['samples'][:1024*128])
+                                    # fft_0 = np.fft.fft(data[0]['samples']*np.bartlett(data[0]['samples'].size))
+                                    # fft_i = np.fft.fft(data[i]['samples']*np.bartlett(data[i]['samples'].size))
+                                    corrolation = np.fft.ifft( fft_0 * np.conjugate(fft_i) )
+                                    # corrolation = np.correlate(data[0]['samples'],data[i]['samples'],'full')
+                                    # freq = np.fft.fftfreq(len(corrolation),1)
+                                    # array([ 0.  ,  1.25,  2.5 ,  3.75, -5.  , -3.75, -2.5 , -1.25])
+                                    x_p = range(0,int(corrolation.size/2))
+                                    x_n = range(-int(corrolation.size/2),0)
+                                    x = np.concatenate((x_p, x_n), axis=None)
+                                    # x = range(-int(corrolation.size/2),int(corrolation.size/2))
+                                    plt.plot(x, corrolation, alpha=0.5)
+                                    plt.title('Corrolation of Signals')
+                                    plt.xlabel('Samples Shifted')
+                                    plt.ylabel('Corrolation')
+                                    # if 'shift' not in data[i]:
+                                    print('Maximum is '+str(np.amax(corrolation))+' at position '+str(np.argmax(corrolation)))
+                                    data[i]['shift'] = np.argmax(corrolation)-data[i]['samples'].size
+                                    print('shift: '+str(data[i]['shift']))
+                                    data[i]['sync'] = False # synchronisation of channel done
 
                         if 'shift' in data[i]:
                             shifted_data = np.roll(data[i]['samples'][:1024*128], data[i]['shift'])
@@ -213,48 +219,63 @@ async def plotloop( sample_rate, center_freq, i ):
 
 
 def disconnect():
-    global loop
-    loop.close()
     global sdrs
     for sdr in sdrs:
         sdr.close()
+    global loop
+    loop.stop()
+    loop.close()
 atexit.register(disconnect)
+
+def user_input():
+    command = input()
+    if command == 'close':
+        print('CLOSE - CLOSE - CLOSE - CLOSE - CLOSE - CLOSE - CLOSE - CLOSE - CLOSE - CLOSE - CLOSE')
+        # disconnect()
+    if command == 'sync':
+        for i in range(0,8):
+            if i not in data:
+                data[i] = {}
+            data[i]['sync'] = True
+
+for i in range(0,8):
+    if i not in data:
+        data[i] = {}
+    data[i]['sync'] = True
 
 # def data_acquisition_loop():
 
-# sdr = RtlSdr()
-# sdr = RtlSdr(serial_number='00000001')
-
-tasks=[]
+input_source = 'sdr'
+# input_source = 'file'
 
 # ------------------------------
 # Start SDRs
 # ------------------------------
-# sdrs=[]
-# for i in range(0,8):
-# # for i in range(0,1):
-#     serial=str(i+1).zfill(8)
-#     # serial="77771111153705700"
-#     print(serial)
-#     sdr = RtlSdr(serial_number=serial)
-#     sdr.sample_rate = 1000000 #2048000
-#     sdr.center_freq = 868e6
-#     sdr.gain = 20.7
-#     sdrs.append(sdr)
-#     tasks.append(receive(sdr,i))
-# tasks.append(plotloop(sdr.sample_rate,sdr.center_freq,1))
+if input_source == 'sdr':
+    for i in range(0,8):
+    # for i in range(0,1):
+        serial=str(i+1).zfill(8)
+        # serial="77771111153705700"
+        print(serial)
+        sdr = RtlSdr(serial_number=serial)
+        sdr.sample_rate = 1000000 #2048000
+        sdr.center_freq = 868e6
+        sdr.gain = 20.7
+        sdrs.append(sdr)
+        tasks.append(receive(sdr,i))
+    tasks.append(plotloop(sdr.sample_rate,sdr.center_freq,1))
 
 # ------------------------------
 # File Stream
 # ------------------------------
-for i in range(0,8):
-    # tasks.append(read('./data/rtl'+str(i+1),1024*32,i))
-    tasks.append(read_stream('../data/rtl'+str(i+1),1024*128,i))
-tasks.append(plotloop(2048000,868e6,1))
+if input_source == 'file':
+    for i in range(0,8):
+        # tasks.append(read('./data/rtl'+str(i+1),1024*32,i))
+        tasks.append(read_stream('../data/rtl'+str(i+1),1024*128,i))
+    tasks.append(plotloop(2048000,868e6,1))
 
+threading.Thread(target=user_input, args=[]).start()
 
-
-loop = asyncio.get_event_loop()
 loop.run_until_complete(asyncio.gather(*tasks))
 # loops[i].run_until_complete(receive(sdr))
 loop.close()
