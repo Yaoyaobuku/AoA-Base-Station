@@ -95,6 +95,15 @@ def pop(n):
     for i in range(0,8):
         data[i]['samples'] = data[i]['samples'][n:]
 
+def corrolate(refference, signal):
+    fft_0 = np.fft.fft(data[0]['samples'][:1024*128])
+    fft_i = np.fft.fft(data[i]['samples'][:1024*128])
+    # fft_0 = np.fft.fft(data[0]['samples']*np.bartlett(data[0]['samples'].size))
+    # fft_i = np.fft.fft(data[i]['samples']*np.bartlett(data[i]['samples'].size))
+    corrolation = np.fft.ifft( fft_0 * np.conjugate(fft_i) )
+    # corrolation = np.correlate(data[0]['samples'],data[i]['samples'],'full')
+    return corrolation
+
 async def plotloop( sample_rate, center_freq, i ):
     plt.ion()
     plt.show()
@@ -140,14 +149,7 @@ async def plotloop( sample_rate, center_freq, i ):
                             if data[i]['sync'] == True:
                                 if 0 in data:
                                     ax1=plt.subplot(3, 2, 4)
-                                    fft_0 = np.fft.fft(data[0]['samples'][:1024*128])
-                                    fft_i = np.fft.fft(data[i]['samples'][:1024*128])
-                                    # fft_0 = np.fft.fft(data[0]['samples']*np.bartlett(data[0]['samples'].size))
-                                    # fft_i = np.fft.fft(data[i]['samples']*np.bartlett(data[i]['samples'].size))
-                                    corrolation = np.fft.ifft( fft_0 * np.conjugate(fft_i) )
-                                    # corrolation = np.correlate(data[0]['samples'],data[i]['samples'],'full')
-                                    # freq = np.fft.fftfreq(len(corrolation),1)
-                                    # array([ 0.  ,  1.25,  2.5 ,  3.75, -5.  , -3.75, -2.5 , -1.25])
+                                    corrolation = corrolate(data[0]['samples'][:1024*128], data[i]['samples'][:1024*128])
                                     x_p = range(0,int(corrolation.size/2))
                                     x_n = range(-int(corrolation.size/2),0)
                                     x = np.concatenate((x_p, x_n), axis=None)
@@ -182,11 +184,7 @@ async def plotloop( sample_rate, center_freq, i ):
                             if i >= 0:
                                 if 0 in data:
                                     ax1=plt.subplot(3, 2, 6)
-                                    fft_0 = np.fft.fft(data[0]['samples'][:1024*128])
-                                    fft_i = np.fft.fft(shifted_data)
-                                    corrolation = np.fft.ifft( fft_0 * np.conjugate(fft_i) )
-                                    # corrolation = np.correlate(data[0]['samples'],shifted_data,'full')
-                                    # freq = (np.fft.fftfreq(len(corrolation),1/sample_rate)+center_freq)/1e6
+                                    corrolation = corrolate(data[0]['samples'][:1024*128], shifted_data)
                                     plt.plot(x, corrolation, alpha=0.5)
                                     plt.title('Corrolation of Shifted Signals')
                                     plt.xlabel('Samples Shifted')
